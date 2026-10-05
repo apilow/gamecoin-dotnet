@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Unit tests (${{ matrix.os }}, SDK ${{ matrix.sdk }}, library ${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        sdk: ["8.0.x", "9.0.x"]
+        target: [net8.0, netstandard2.1]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          # The tests run on the .NET 8 runtime whatever SDK builds them.
+          dotnet-version: |
+            8.0.x
+            ${{ matrix.sdk }}
+      - name: Build (warnings are errors)
+        run: dotnet build -c Release -p:LibraryTarget=${{ matrix.target }}
+      - name: Test
+        run: dotnet test tests/Apilow.GameCoin.Tests -c Release --no-build -p:LibraryTarget=${{ matrix.target }}
+
+  pack:
+    name: Pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet pack src/Apilow.GameCoin -c Release -o artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nupkg
+          path: artifacts/*.nupkg

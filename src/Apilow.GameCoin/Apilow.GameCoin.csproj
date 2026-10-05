@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.1</TargetFrameworks>
+    <RootNamespace>Apilow.GameCoin</RootNamespace>
+    <AssemblyName>Apilow.GameCoin</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsTrimmable Condition="'$(TargetFramework)' == 'net8.0'">true</IsTrimmable>
+    <IsAotCompatible Condition="'$(TargetFramework)' == 'net8.0'">true</IsAotCompatible>
+
+    <PackageId>Apilow.GameCoin</PackageId>
+    <Description>Server SDK for Apilow GameCoin, the bank of your game: virtual currencies, inventory and sales. Zero dependencies on .NET 8; usable from Unity tooling through netstandard2.1.</Description>
+    <PackageTags>gamecoin;apilow;game;virtual-currency;wallet;inventory;in-app-purchase;unity</PackageTags>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>See CHANGELOG.md.</PackageReleaseNotes>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- netstandard2.1 has no System.Text.Json in the box: it is the only dependency allowed there. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" Visible="false" />
+    <InternalsVisibleTo Include="Apilow.GameCoin.Tests" />
+  </ItemGroup>
+
+</Project>

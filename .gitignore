@@ -1,0 +1,29 @@
+# Build output
+bin/
+obj/
+artifacts/
+*.nupkg
+*.snupkg
+
+# Test results and coverage
+TestResults/
+*.trx
+coverage/
+*.coverage
+
+# Secrets: sandbox keys and any local environment file
+.env
+.env.*
+*.env
+*.user
+*.secrets.json
+secrets.json
+
+# IDEs and OS files
+.vs/
+.vscode/
+.idea/
+*.suo
+*.DotSettings.user
+.DS_Store
+Thumbs.db

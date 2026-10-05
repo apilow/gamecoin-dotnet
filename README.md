@@ -1,0 +1,285 @@
+# Apilow.GameCoin for .NET
+
+Server SDK for **Apilow GameCoin**, the bank of your game: virtual currencies, inventory and sales, behind one API.
+Use it from your game backend (ASP.NET, a worker, a dedicated server) to grant and spend coins, manage items, and sell
+packs with real money.
+
+- `net8.0` and `netstandard2.1` (so Unity editor tools and dedicated servers can use it too).
+- **No dependency** on `net8.0` (`HttpClient`, `System.Text.Json`). On `netstandard2.1` the only dependency is `System.Text.Json`.
+- Everything is `async`, takes a `CancellationToken`, and returns immutable `record`s.
+- Safe retries built in: every call that changes something carries an idempotency key.
+
+> This is a **server** SDK. It uses your **secret key** (`gc_sk_test_…` / `gc_sk_live_…`), which must never be shipped
+> in a game client or a web page. For the browser, use the GameCoin browser SDK with the publishable key.
+
+## Install
+
+```sh
+dotnet add package Apilow.GameCoin
+```
+
+## Quickstart
+
+Grant gems to a player, spend some, and start the purchase of a pack (`GAMECOIN_SECRET_KEY` holds a `gc_sk_test_…`
+key; `GAMECOIN_BASE_URL` is optional and defaults to production):
+
+```csharp
+using Apilow.GameCoin;
+
+using var gamecoin = new GameCoinClient(Environment.GetEnvironmentVariable("GAMECOIN_SECRET_KEY")!,
+    new GameCoinOptions { BaseUrl = Environment.GetEnvironmentVariable("GAMECOIN_BASE_URL") ?? GameCoinClient.DefaultBaseUrl });
+var player = PlayerRef.Ext($"quickstart-{Guid.NewGuid():N}"); // your own id for the player (a fresh one: every run starts at zero)
+
+var granted = await gamecoin.Wallet.GrantAsync(player, new GrantRequest { Currency = "gems", Amount = 100, Reason = "level_up" });
+var spent = await gamecoin.Wallet.SpendAsync(player, new SpendRequest { Currency = "gems", Amount = 30 });
+var checkout = await gamecoin.Checkouts.CreateAsync(player, new CheckoutRequest { PackSku = "gems-500" });
+Console.WriteLine($"gems: {granted.Balance.Total} -> {spent.Balance.Total}; the player pays at {checkout.CheckoutUrl}");
+```
+
+This prints `gems: 100 -> 70; the player pays at https://…/pay/<order id>?t=…`. The same program lives in
+`examples/Quickstart`. The other examples below continue from this client.
+
+## Configuration
+
+```csharp
+using Apilow.GameCoin;
+
+using var gamecoin = new GameCoinClient(
+    Environment.GetEnvironmentVariable("GAMECOIN_SECRET_KEY")!,
+    new GameCoinOptions
+    {
+        BaseUrl = Environment.GetEnvironmentVariable("GAMECOIN_BASE_URL") ?? "https://gamecoin.apilow.com", // the default
+        Timeout = TimeSpan.FromSeconds(30), // per HTTP attempt; the default
+        MaxRetries = 2,                     // automatic retries; the default (three attempts). 0 turns them off
+    });
+
+Console.WriteLine($"{gamecoin.Environment} environment at {gamecoin.BaseUrl}"); // "test" or "live", read from the key
+```
+
+| Option | Default | Meaning |
+|---|---|---|
+| `BaseUrl` | `https://gamecoin.apilow.com` | Origin of the service; the SDK appends `/api/v1`, drops trailing `/` and keeps a path prefix. Only `http(s)` without credentials, query or fragment. |
+| `Timeout` | 30 s | Timeout of each HTTP attempt (a retry gets a fresh one). |
+| `MaxRetries` | 2 | Automatic retries, 0 to 10. See [Idempotency and retries](#idempotency-and-retries). |
+| `HttpClient` | created for you | Your own `HttpClient`, for instance from `IHttpClientFactory`. Its default headers are never touched and it is never disposed. |
+| `HttpMessageHandler` | none | A handler the SDK wraps in its own `HttpClient` (tests, proxies, logging). Not disposed either. |
+
+`HttpClient` and `HttpMessageHandler` are mutually exclusive. The constructor rejects anything that is not a secret key
+(surrounding white space, such as a newline read from a file, is trimmed); a publishable key (`gc_pk_…`) gets a message that
+points to the browser SDK. The key never appears in an exception, and `ToString()` of the client shows its prefix only:
+`gc_sk_test_…`.
+
+Create **one** client per application and keep it (register it as a singleton): it is thread-safe and reuses its
+connections. `GameCoinClient` is `IDisposable` and disposes only the `HttpClient` it created itself.
+
+Every request carries `Authorization: Bearer <key>`, `Accept: application/json` and
+`User-Agent: gamecoin-dotnet/<version> (dotnet/<runtime version>)`.
+
+## Players and the `ext` helper
+
+A player is a GameCoin player id, or your game's own id through `PlayerRef.Ext(...)` (sent as `ext:<your id>`):
+
+```csharp
+var player = PlayerRef.Ext("user-42"); // your game's id; any string works: spaces, slashes and accents are encoded for you
+var created = await gamecoin.Players.UpsertAsync(player, new PlayerProfile { DisplayName = "Ann", Country = "BE" });
+Console.WriteLine($"{created.Id} is {created.ExternalId} ({created.DisplayName}, {created.Country})");
+
+var again = await gamecoin.Players.GetAsync(PlayerRef.FromId(created.Id)); // by GameCoin id
+var token = await gamecoin.Players.CreateTokenAsync(player);               // short-lived, for the browser SDK
+Console.WriteLine($"{again.Kind}, token valid until {token.ExpiresAt:u}");
+
+await gamecoin.Players.UpsertAsync(player, new PlayerProfile { Clear = PlayerProfileFields.Country }); // erase a field
+```
+
+- A write call (`UpsertAsync`, grant, spend, purchase…) on an unknown `ext:` player creates it. A read (`GetAsync`,
+  `Wallet.GetAsync`…) answers `NOT_FOUND`.
+- In a `PlayerProfile`, a `null` property leaves the field unchanged; list a field in `Clear` to erase it.
+- Path segments are URL-encoded **exactly once**. A plain `string` converts to a GameCoin id: `GetAsync("6ac4…")`.
+
+## Wallet and ledger
+
+```csharp
+var wallet = await gamecoin.Wallet.GetAsync(player); // one line per currency, zeros included
+foreach (var balance in wallet.Balances)
+{
+    Console.WriteLine($"{balance.Currency}: {balance.Total} ({balance.Paid} paid + {balance.Bonus} bonus)");
+}
+
+var metadata = new Dictionary<string, string> { ["level"] = "7" };
+var grant = await gamecoin.Wallet.GrantAsync(player, new GrantRequest { Currency = "gems", Amount = 100, Reason = "level_up", Metadata = metadata });
+var spend = await gamecoin.Wallet.SpendAsync(player, new SpendRequest { Currency = "gems", Amount = 30, Reason = "shop" });
+Console.WriteLine($"{grant.Entry.Type} then {spend.Entry.Type}: balance {spend.Balance.Total}");
+
+await foreach (var entry in gamecoin.Ledger.IterateAsync(player, new LedgerQuery { Currency = "gems", Limit = 50 }))
+{
+    Console.WriteLine($"{entry.CreatedAt:u} {entry.Type} {entry.BonusDelta + entry.PaidDelta} -> {entry.BalanceAfter.Total}");
+}
+
+LedgerPage page = await gamecoin.Ledger.ListAsync(player, new LedgerQuery { Limit = 20 }); // one page, newest first
+Console.WriteLine($"{page.Entries.Count} entries, next cursor: {page.NextCursor ?? "none"}");
+```
+
+- A grant always credits the *bonus* bucket. Amounts are `long` and must be positive.
+- `Ledger.IterateAsync` is an `IAsyncEnumerable<LedgerEntry>`: pages are fetched lazily, one at a time, as you read.
+  `LedgerQuery.Cursor` resumes from a given page; `Limit` is the page size (1 to 100, default 20).
+- Spending more than the player has raises `INSUFFICIENT_FUNDS` (see [Errors](#errors)).
+
+## Inventory and purchases
+
+```csharp
+var catalog = await gamecoin.Catalog.GetAsync(); // active currencies, items and packs
+Console.WriteLine(string.Join(", ", catalog.Items.Select(i => $"{i.Sku} ({i.Type}, {i.Price?.Amount} {i.Price?.Currency})")));
+
+var given = await gamecoin.Inventory.GrantAsync(player, new InventoryGrantRequest { Sku = "potion", Quantity = 2 }); // for free
+var used = await gamecoin.Inventory.ConsumeAsync(player, new InventoryConsumeRequest { Sku = "potion" });           // quantity defaults to 1
+Console.WriteLine($"{given.Quantity} then {used.Quantity} potion(s)");
+
+var bought = await gamecoin.Purchases.CreateAsync(player, new PurchaseRequest { Sku = "potion" }); // pays the item's price in its currency
+Console.WriteLine($"bought: {bought.Item.Quantity} potion(s), {bought.Balance.Total} {bought.Balance.Currency} left");
+
+foreach (var item in await gamecoin.Inventory.ListAsync(player)) // owned items only (quantity above 0)
+{
+    Console.WriteLine($"{item.Sku} x{item.Quantity}");
+}
+```
+
+`Inventory.ConsumeAsync` returns the item even when it reaches 0. A durable item with `MaxOwned` raises `LIMIT_REACHED`
+beyond the limit.
+
+## Checkout, orders and refunds
+
+A **checkout** sells a *pack* for real money: you create an order, send the player to `CheckoutUrl`, and the coins and
+items are delivered when the payment succeeds.
+
+```csharp
+var checkout = await gamecoin.Checkouts.CreateAsync(player, new CheckoutRequest
+{
+    PackSku = "gems-500",
+    SuccessUrl = "https://game.example.com/shop/thanks", // optional: where the player lands after paying
+    CancelUrl = "https://game.example.com/shop",         // optional
+    Country = "BE",                                      // optional: the VAT country (server side only)
+});
+Console.WriteLine($"{checkout.Order.Status}: {checkout.Order.AmountCents} cents ({checkout.Order.Currency}), pay at {checkout.CheckoutUrl}");
+
+var order = await gamecoin.Orders.GetAsync(checkout.Order.Id); // poll, or call it when the player comes back
+Console.WriteLine($"{order.Id}: {order.Status}, paid at {order.PaidAt?.ToString("u") ?? "(not yet)"}");
+
+try
+{
+    await gamecoin.Orders.RefundAsync(order.Id, new RefundRequest { Reason = "customer asked" }); // takes the coins and items back
+}
+catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.Conflict)
+{
+    Console.WriteLine($"cannot refund an unpaid order: {ex.Message}");
+}
+```
+
+In test mode the payment is simulated: open `CheckoutUrl` and press "Pay (simulated)".
+
+**Refunds have no idempotency key**, so the SDK retries `RefundAsync` on `429` only. After a network error, a timeout or
+a `5xx` it raises, and you should check the outcome with `Orders.GetAsync` (status `refunded` or not) before trying again.
+
+## Idempotency and retries
+
+Every call that changes a wallet or an inventory, or creates a checkout, sends an `Idempotency-Key` header. If you give
+none, the SDK generates a UUID v4 **once per call** and reuses it for each automatic retry, so a retry can never credit
+twice. To make *your own* retries safe (a job that may run twice), supply a stable key:
+
+```csharp
+var key = new RequestOptions { IdempotencyKey = $"quest-completed-{Guid.NewGuid():N}" }; // in real code: derive it from the event, e.g. "quest-completed-<player>-<quest>"
+var request = new GrantRequest { Currency = "gold", Amount = 25, Reason = "quest" };
+
+var first = await gamecoin.Wallet.GrantAsync(player, request, key);
+var second = await gamecoin.Wallet.GrantAsync(player, request, key); // same key, same request: the original response
+Console.WriteLine($"{first.Replayed}, {second.Replayed}, same entry: {first.Entry.Id == second.Entry.Id}"); // False, True, same entry: True
+```
+
+`Replayed` is `true` when the API answered with the original response of an earlier request with the same key (header
+`Idempotent-Replayed: true`); it exists on `Movement`, `Purchase`, `Checkout` and `InventoryItem`. The same key with a
+*different* request raises `IDEMPOTENCY_CONFLICT`. A key is 1 to 100 printable ASCII characters and is kept for 30 days.
+A replayed checkout returns the order in its **current** state.
+
+Automatic retries (at most `MaxRetries`, so three attempts by default):
+
+| Situation | Retried? |
+|---|---|
+| Network error, timeout, `5xx`, `429` | yes |
+| Any other `4xx` | never |
+| `RefundAsync` | on `429` only |
+
+Every read, `UpsertAsync`, `CreateTokenAsync` and every call with an idempotency key follows the first line; a call cancelled
+through its `CancellationToken` is never retried (`OperationCanceledException`).
+
+The delay is `0.5 s × 2^attempt × a random factor in [0.75, 1.25]`. A `Retry-After` header (seconds or an HTTP date) wins,
+up to 30 s inclusive, on a `429` as on a `5xx`; beyond that the SDK does not wait: it raises the error with `RetryAfter` set
+so that you decide. A malformed `200` (`INVALID_RESPONSE`) is never retried; an HTML `502` from a proxy is retried like any
+`5xx`.
+
+## Errors
+
+Every failed call raises `GameCoinException` (arguments rejected locally raise the usual `ArgumentException` before any
+request, and a cancelled call raises `OperationCanceledException`):
+
+| Property | Content |
+|---|---|
+| `Code` | API code (`INSUFFICIENT_FUNDS`, `NOT_FOUND`…), or `NETWORK_ERROR` / `TIMEOUT` (status 0), or `INVALID_RESPONSE` (the body is not the expected JSON, or a field has the wrong shape: the HTTP status is kept) |
+| `Status` | HTTP status, 0 when no response was received |
+| `Message` | Message of the API, or a short description |
+| `Details` | `details` of the API as `IReadOnlyDictionary<string, JsonElement>` (`required`, `available`, `fieldErrors`…), empty when absent |
+| `RetryAfter` | `TimeSpan?` (the header is in seconds), set when the API sent `Retry-After` |
+
+```csharp
+try
+{
+    await gamecoin.Wallet.SpendAsync(player, new SpendRequest { Currency = "gems", Amount = 1_000_000 });
+}
+catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.InsufficientFunds)
+{
+    Console.WriteLine($"needs {ex.Details["required"].GetInt64()}, has {ex.Details["available"].GetInt64()}");
+}
+catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.RateLimited)
+{
+    Console.WriteLine($"slow down, retry in {ex.RetryAfter}");
+}
+catch (GameCoinException ex)
+{
+    Console.WriteLine($"{ex.Code} (HTTP {ex.Status}): {ex.Message}");
+}
+```
+
+The codes are constants of `GameCoinErrorCodes`: `ValidationFailed`, `IdempotencyKeyRequired`, `Unauthenticated`,
+`PaymentFailed`, `Forbidden`, `PlayerBlocked`, `EnvNotEnabled`, `NotFound`, `InsufficientFunds`, `LimitReached`,
+`IdempotencyConflict`, `Conflict`, `ReadOnly`, `RateLimited`, `Internal`, plus the SDK's own `NetworkError`, `Timeout`
+and `InvalidResponse`. `Details["fieldErrors"]` is meant for developers, not for parsing. Unknown fields in a response are
+ignored, an API code this version does not know is passed through as is, and an unknown future `Status` or `Type` value
+stays readable as a string.
+
+**Arguments are checked before any request**: an empty player, currency, sku or order id (or an empty optional string such
+as `SuccessUrl`), an `Amount` or `Quantity` below 1, a `Limit` outside 1 to 100, an invalid idempotency key raise
+`ArgumentException` (`ArgumentOutOfRangeException` for numbers), not a `GameCoinException`; the message names the argument,
+never its value.
+
+## Running the tests
+
+```sh
+dotnet test                                                # unit tests, no network (net8.0 library)
+dotnet test tests/Apilow.GameCoin.Tests -p:LibraryTarget=netstandard2.1   # the same tests against the netstandard2.1 build
+```
+
+The unit tests use a fake `HttpMessageHandler` (and a loopback socket for the wire format). The **integration test** is
+skipped unless `GAMECOIN_SECRET_KEY` and `GAMECOIN_BASE_URL` are set; it runs against the sandbox game created by
+`npm run sdk:sandbox` in the GameCoin application (currencies `gems` and `gold`, items `potion` and `fire-sword`, packs
+`starter` and `gems-500`):
+
+```sh
+GAMECOIN_SECRET_KEY=gc_sk_test_… GAMECOIN_BASE_URL=http://localhost:3400 dotnet test
+```
+
+## Status
+
+Pre-release (`0.1.0`). The API runs in **test mode with simulated payments**; real payments are not available yet. The
+package and repository names may change before the first public release.
+
+## Licence
+
+MIT, Copyright (c) 2026 Apilow.

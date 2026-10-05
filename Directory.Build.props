@@ -1,0 +1,23 @@
+<Project>
+
+  <!-- Shared by the library, the tests and the example. Package and repository names live here, once. -->
+  <PropertyGroup>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <NuGetAudit>true</NuGetAudit>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Authors>Apilow</Authors>
+    <Company>Apilow</Company>
+    <Copyright>Copyright (c) 2026 Apilow</Copyright>
+    <RepositoryUrl>https://github.com/apilow/gamecoin-dotnet</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://github.com/apilow/gamecoin-dotnet</PackageProjectUrl>
+  </PropertyGroup>
+
+</Project>
