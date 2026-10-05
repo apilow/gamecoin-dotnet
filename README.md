@@ -20,6 +20,9 @@ dotnet add package Apilow.GameCoin
 
 ## Quickstart
 
+> The snippets assume [implicit usings](https://learn.microsoft.com/dotnet/core/project-sdk/overview#implicit-using-directives)
+> (`System`, `System.Linq`, `System.Threading.Tasks`…), which new .NET projects enable by default.
+
 Grant gems to a player, spend some, and start the purchase of a pack (`GAMECOIN_SECRET_KEY` holds a `gc_sk_test_…`
 key; `GAMECOIN_BASE_URL` is optional and defaults to production):
 
