@@ -166,7 +166,7 @@ public class WireTests
         Assert.Contains($"Authorization: Bearer {TestRig.SecretKey}", lines);
         Assert.Contains("Idempotency-Key: wire-key-1", lines);
         Assert.Contains("Accept: application/json", lines);
-        Assert.Contains(lines, l => l.StartsWith("User-Agent: gamecoin-dotnet/0.1.0 (dotnet/", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("User-Agent: gamecoin-dotnet/0.2.0 (dotnet/", StringComparison.Ordinal));
         Assert.Contains(lines, l => l.StartsWith("Content-Type: application/json", StringComparison.Ordinal));
         Assert.Equal("""{"currency":"gems","amount":100,"reason":"level_up"}""", server.Bodies[0]);
         Assert.True(movement.Replayed);

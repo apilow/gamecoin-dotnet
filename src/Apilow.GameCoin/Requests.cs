@@ -100,6 +100,27 @@ public sealed record CheckoutRequest
 
     /// <summary>ISO 3166-1 alpha-2 country of the player, for the VAT.</summary>
     public string? Country { get; init; }
+
+    /// <summary>
+    /// Language of the hosted payment page, the receipt and the e-mails of the order: <c>fr</c>, <c>en</c> or <c>nl</c>
+    /// (see <see cref="CheckoutLocale"/>). The API ignores any other value without an error; the SDK only checks that it is not
+    /// empty, and does not send the field when it is <c>null</c>. A pending order the API reuses takes the language of the
+    /// latest request.
+    /// </summary>
+    public string? Locale { get; init; }
+}
+
+/// <summary>Languages of the hosted payment page, for <see cref="CheckoutRequest.Locale"/>.</summary>
+public static class CheckoutLocale
+{
+    /// <summary>French.</summary>
+    public const string French = "fr";
+
+    /// <summary>English.</summary>
+    public const string English = "en";
+
+    /// <summary>Dutch.</summary>
+    public const string Dutch = "nl";
 }
 
 /// <summary>Refunds an order.</summary>

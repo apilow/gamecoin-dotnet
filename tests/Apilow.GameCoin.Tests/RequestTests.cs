@@ -258,6 +258,53 @@ public class RequestTests
         Assert.Equal("""{"packSku":"starter"}""", rig.Only.Body);
     }
 
+    [Theory]
+    [InlineData("fr")]
+    [InlineData("en")]
+    [InlineData("nl")]
+    [InlineData("de")] // not validated by the SDK: the API ignores what it does not know
+    public async Task Checkouts_create_sends_the_locale_when_given(string locale)
+    {
+        var rig = new TestRig();
+        rig.Handler.Ok($$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""");
+
+        await rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", Locale = locale });
+
+        Assert.Equal($$"""{"packSku":"starter","locale":"{{locale}}"}""", rig.Only.Body);
+    }
+
+    [Fact]
+    public async Task Checkouts_create_with_every_field_and_the_locale()
+    {
+        var rig = new TestRig();
+        rig.Handler.Ok($$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""");
+
+        await rig.Client.Checkouts.CreateAsync(
+            User,
+            new CheckoutRequest { PackSku = "gems-500", SuccessUrl = "https://game.test/ok", CancelUrl = "https://game.test/ko", Country = "BE", Locale = CheckoutLocale.Dutch });
+
+        Assert.Equal(
+            """{"packSku":"gems-500","successUrl":"https://game.test/ok","cancelUrl":"https://game.test/ko","country":"BE","locale":"nl"}""",
+            rig.Only.Body);
+    }
+
+    [Fact]
+    public async Task Checkouts_create_does_not_send_the_locale_when_absent()
+    {
+        var rig = new TestRig();
+        rig.Handler.Ok($$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""");
+
+        await rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", Locale = null });
+
+        Assert.DoesNotContain("locale", rig.Only.Body);
+    }
+
+    [Fact]
+    public void Checkout_locale_constants_name_the_three_languages()
+    {
+        Assert.Equal(new[] { "fr", "en", "nl" }, new[] { CheckoutLocale.French, CheckoutLocale.English, CheckoutLocale.Dutch });
+    }
+
     [Fact]
     public async Task Orders_get_and_refund()
     {

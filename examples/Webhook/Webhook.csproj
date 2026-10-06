@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Inside this repository the example uses the sources; in your project: dotnet add package Apilow.GameCoin -->
+    <ProjectReference Include="..\..\src\Apilow.GameCoin\Apilow.GameCoin.csproj" />
+  </ItemGroup>
+
+</Project>

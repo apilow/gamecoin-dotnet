@@ -161,6 +161,7 @@ var checkout = await gamecoin.Checkouts.CreateAsync(player, new CheckoutRequest
     SuccessUrl = "https://game.example.com/shop/thanks", // optional: where the player lands after paying
     CancelUrl = "https://game.example.com/shop",         // optional
     Country = "BE",                                      // optional: the VAT country (server side only)
+    Locale = CheckoutLocale.English,                     // optional: "fr", "en" or "nl", the language of the payment page, receipt and e-mails
 });
 Console.WriteLine($"{checkout.Order.Status}: {checkout.Order.AmountCents} cents ({checkout.Order.Currency}), pay at {checkout.CheckoutUrl}");
 
@@ -179,8 +180,97 @@ catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.Conflict)
 
 In test mode the payment is simulated: open `CheckoutUrl` and press "Pay (simulated)".
 
+`Locale` is the language of the hosted payment page, of the receipt and of the e-mails of the order. The API ignores any
+value other than `fr`, `en` and `nl` without an error, and the SDK does not send the field when it is `null`. A pending
+order that the API reuses takes the language of the latest request.
+
 **Refunds have no idempotency key**, so the SDK retries `RefundAsync` on `429` only. After a network error, a timeout or
 a `5xx` it raises, and you should check the outcome with `Orders.GetAsync` (status `refunded` or not) before trying again.
+
+## Webhooks
+
+GameCoin calls **your server** when an order is delivered, refunded or disputed (declare the endpoint and get its signing
+secret `whsec_gc_…` in the dashboard). `Webhooks.ConstructEvent` checks the `GameCoin-Signature` header and returns the typed
+event. It is a pure function: it needs no client and makes no request.
+
+> [!WARNING]
+> Verify the signature on the **raw body**, exactly as received, before any JSON parsing. A body that was parsed and
+> serialized again can differ by one character and the signature then fails. In ASP.NET Core, do not bind the body to a
+> model on this route: copy `Request.Body` to a `MemoryStream` as below.
+
+A complete ASP.NET minimal API endpoint (also in `examples/Webhook`):
+
+```csharp
+using System.Collections.Concurrent;
+using Apilow.GameCoin;
+
+var secret = Environment.GetEnvironmentVariable("GAMECOIN_WEBHOOK_SECRET")!; // whsec_gc_…, from the dashboard
+var builder = WebApplication.CreateBuilder(args);
+var app = builder.Build();
+
+var processed = new ConcurrentDictionary<string, bool>(); // in real code: a database table keyed by the event id
+
+app.MapPost("/gamecoin/webhook", async (HttpRequest request) =>
+{
+    using var buffer = new MemoryStream();
+    await request.Body.CopyToAsync(buffer); // the raw body, untouched
+
+    WebhookEvent webhookEvent;
+    try
+    {
+        webhookEvent = Webhooks.ConstructEvent(buffer.ToArray(), request.Headers["GameCoin-Signature"].ToString(), secret);
+    }
+    catch (WebhookSignatureException ex)
+    {
+        app.Logger.LogWarning("Webhook refused: {Reason}", ex.Reason);
+        return Results.BadRequest();
+    }
+
+    if (!processed.TryAdd(webhookEvent.Id, true))
+    {
+        return Results.Ok(); // GameCoin can send an event more than once: process it once
+    }
+
+    switch (webhookEvent.Data)
+    {
+        case Order order when webhookEvent.Type == WebhookEventTypes.OrderFulfilled:
+            Console.WriteLine($"unlock {order.Pack.Sku} for {order.PlayerId}");
+            break;
+        case WalletCreditedData credited:
+            Console.WriteLine($"{credited.PlayerId} received {credited.Credits.Count} credit(s)");
+            break;
+    }
+
+    return Results.Ok(); // a 2xx within 10 seconds
+});
+
+app.Run();
+```
+
+`ConstructEvent(rawBody, signatureHeader, secret, options)` takes the raw body as a `string` or a `byte[]` (never a parsed
+object), the value of the `GameCoin-Signature` header (`t=<unix seconds>,v1=<hex>`), and the signing secret (trimmed;
+never put it in a log). Every `v1` of the header is compared in constant time and unknown keys are ignored. `WebhookOptions`
+has `ToleranceSeconds` (default 300; `0` turns the timestamp check off) and `Now` (a clock, for tests).
+
+The returned `WebhookEvent` has `Id`, `Type`, `CreatedAt`, `Env` and `Data`. `Type` is one of the `WebhookEventTypes`
+constants, and `Data` is typed by it:
+
+| `Type` | `Data` |
+|---|---|
+| `order.fulfilled`, `order.refunded`, `order.chargeback` | `Order`, the same object as `Orders.GetAsync` |
+| `wallet.credited` | `WalletCreditedData` (`PlayerId`, `OrderId`, `Credits` with `Currency`, `Paid`, `Bonus`) |
+| `webhook.test` | `WebhookTestData` (`Message`) |
+| anything else | the untouched `JsonElement`: an event type added later never fails |
+
+A call that cannot be trusted raises `WebhookSignatureException` (it does **not** derive from `GameCoinException`: no API
+call is involved). Answer `400`. Its `Reason` is one of the `WebhookSignatureReason` constants: `missing_header`,
+`malformed_header`, `no_matching_signature` (wrong secret, altered body, or a body that was parsed and re-serialized),
+`timestamp_out_of_tolerance` (a replayed call or a skewed clock) and `invalid_payload` (the signature is right but the body
+is not an event). The message never contains the secret, the body or the signature. A missing secret or body is an
+`ArgumentException` instead.
+
+An event is delivered **at least once**: keep the ids you have processed (`Id` is stable for an event). Answer `2xx` quickly,
+then do the heavy work.
 
 ## Idempotency and retries
 
@@ -280,7 +370,7 @@ GAMECOIN_SECRET_KEY=gc_sk_test_… GAMECOIN_BASE_URL=http://localhost:3400 dotne
 
 ## Status
 
-Pre-release (`0.1.0`). The API runs in **test mode with simulated payments**; real payments are not available yet. The
+Pre-release (`0.2.0`). The API runs in **test mode with simulated payments**; real payments are not available yet. The
 package and repository names may change before the first public release.
 
 ## Licence

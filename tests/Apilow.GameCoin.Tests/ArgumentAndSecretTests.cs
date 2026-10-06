@@ -42,6 +42,7 @@ public class ArgumentAndSecretTests
         yield return Bad("checkout: empty success url", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", SuccessUrl = "" }));
         yield return Bad("checkout: empty cancel url", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", CancelUrl = "" }));
         yield return Bad("checkout: empty country", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", Country = "" }));
+        yield return Bad("checkout: empty locale", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", Locale = "" }));
         yield return Bad("upsert: empty display name", rig => rig.Client.Players.UpsertAsync(User, new PlayerProfile { DisplayName = "" }));
         yield return Bad("upsert: empty email", rig => rig.Client.Players.UpsertAsync(User, new PlayerProfile { Email = "" }));
         yield return Bad("upsert: birth year 0", rig => rig.Client.Players.UpsertAsync(User, new PlayerProfile { BirthYear = 0 }));

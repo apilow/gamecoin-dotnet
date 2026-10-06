@@ -19,7 +19,7 @@ public sealed class CheckoutsResource
     /// in its current state.
     /// </summary>
     /// <param name="player">The player (created if it is an unknown <c>ext:</c> reference).</param>
-    /// <param name="request">Pack sku, return URLs and country.</param>
+    /// <param name="request">Pack sku, return URLs, country and locale.</param>
     /// <param name="options">Per-call options, notably your own idempotency key.</param>
     /// <param name="cancellationToken">Cancels the call (and its retries).</param>
     /// <exception cref="ArgumentException">An argument is invalid (empty player or pack sku).</exception>
@@ -34,6 +34,7 @@ public sealed class CheckoutsResource
         var successUrl = Guard.NotEmptyIfGiven(request.SuccessUrl, "SuccessUrl", nameof(request));
         var cancelUrl = Guard.NotEmptyIfGiven(request.CancelUrl, "CancelUrl", nameof(request));
         var country = Guard.NotEmptyIfGiven(request.Country, "Country", nameof(request));
+        var locale = Guard.NotEmptyIfGiven(request.Locale, "Locale", nameof(request));
         var key = ApiClient.ResolveIdempotencyKey(options);
 
         var body = BodyWriter.Write(writer =>
@@ -42,6 +43,7 @@ public sealed class CheckoutsResource
             writer.WriteIfNotNull("successUrl", successUrl);
             writer.WriteIfNotNull("cancelUrl", cancelUrl);
             writer.WriteIfNotNull("country", country);
+            writer.WriteIfNotNull("locale", locale);
         });
 
         var response = await _api.SendAsync(

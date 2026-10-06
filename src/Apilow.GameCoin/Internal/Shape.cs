@@ -293,6 +293,42 @@ internal static class Shape
         DateOrNull(o, "refundedAt", path);
     }
 
+    // --- Webhook events -------------------------------------------------------------------------------------------
+
+    /// <summary>The envelope every webhook body has: <c>id</c>, <c>type</c>, <c>createdAt</c>, <c>env</c> and a <c>data</c> of any shape.</summary>
+    public static void WebhookEnvelope(JsonElement value)
+    {
+        var o = Obj(value, "event");
+        Str(o, "id", "event");
+        Str(o, "type", "event");
+        Date(o, "createdAt", "event");
+        Str(o, "env", "event");
+        if (!o.TryGetProperty("data", out _))
+        {
+            throw new ShapeException("event.data", "present");
+        }
+    }
+
+    public static void WalletCredited(JsonElement value, string path)
+    {
+        var o = Obj(value, path);
+        Str(o, "playerId", path);
+        Str(o, "orderId", path);
+        List(o, "credits", path, (credit, creditPath) =>
+        {
+            var c = Obj(credit, creditPath);
+            Str(c, "currency", creditPath);
+            Int(c, "paid", creditPath);
+            Int(c, "bonus", creditPath);
+        });
+    }
+
+    public static void WebhookTest(JsonElement value, string path)
+    {
+        var o = Obj(value, path);
+        Str(o, "message", path);
+    }
+
     // --- Composed responses ---------------------------------------------------------------------------------------
 
     public static void PlayerToken(JsonElement value)
