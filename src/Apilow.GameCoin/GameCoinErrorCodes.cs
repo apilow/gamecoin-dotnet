@@ -11,7 +11,10 @@ namespace Apilow.GameCoin;
 /// </example>
 public static class GameCoinErrorCodes
 {
-    /// <summary>400: body or query invalid (see <c>Details["fieldErrors"]</c>).</summary>
+    /// <summary>
+    /// 400: body or query invalid (see <c>Details["fieldErrors"]</c>). A refused gift code is <c>fieldErrors.code = ["CODE_INVALID"]</c>, a
+    /// refused creator code <c>fieldErrors.creatorCode = ["CODE_INVALID"]</c>.
+    /// </summary>
     public const string ValidationFailed = "VALIDATION_FAILED";
 
     /// <summary>400: missing or empty <c>Idempotency-Key</c> on a mutation. The SDK always sends one.</summary>
@@ -38,8 +41,17 @@ public static class GameCoinErrorCodes
     /// <summary>409: the wallet (or the item quantity) is too low (<c>Details["required"]</c>, <c>Details["available"]</c>).</summary>
     public const string InsufficientFunds = "INSUFFICIENT_FUNDS";
 
-    /// <summary>409: <c>maxOwned</c> or <c>maxPerPlayer</c> exceeded.</summary>
+    /// <summary>409: <c>maxOwned</c> or <c>maxPerPlayer</c> exceeded, or a gift code whose items the player cannot receive at all.</summary>
     public const string LimitReached = "LIMIT_REACHED";
+
+    /// <summary>
+    /// 409: the pack is outside its sale window (<c>Details["startsAt"]</c> and <c>Details["endsAt"]</c>: ISO 8601 text or
+    /// <c>null</c>). Raised by <see cref="CheckoutsResource.CreateAsync"/>.
+    /// </summary>
+    public const string PackNotAvailable = "PACK_NOT_AVAILABLE";
+
+    /// <summary>409: no unit of the pack is left (<c>Details["packSku"]</c>). Raised by <see cref="CheckoutsResource.CreateAsync"/>.</summary>
+    public const string PackSoldOut = "PACK_SOLD_OUT";
 
     /// <summary>409: the idempotency key was already used with another request.</summary>
     public const string IdempotencyConflict = "IDEMPOTENCY_CONFLICT";

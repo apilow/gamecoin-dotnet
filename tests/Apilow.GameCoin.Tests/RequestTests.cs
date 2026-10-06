@@ -361,7 +361,7 @@ public class RequestTests
             .Ok("""{"entries":[],"nextCursor":null}""").Ok("""{"items":[]}""")
             .Ok($$"""{"item":{{Samples.Item}}}""").Ok($$"""{"item":{{Samples.Item}}}""")
             .Ok($$"""{"entry":{{Samples.Entry}},"balance":{{Samples.Balance}},"item":{{Samples.Item}}}""")
-            .Ok($$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""");
+            .Ok($$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""").Ok(Samples.Redemption);
         var player = PlayerRef.Ext("a b/c%dé");
 
         await rig.Client.Players.UpsertAsync(player);
@@ -376,8 +376,9 @@ public class RequestTests
         await rig.Client.Inventory.ConsumeAsync(player, new InventoryConsumeRequest { Sku = "potion" });
         await rig.Client.Purchases.CreateAsync(player, new PurchaseRequest { Sku = "potion" });
         await rig.Client.Checkouts.CreateAsync(player, new CheckoutRequest { PackSku = "starter" });
+        await rig.Client.Codes.RedeemAsync(player, "WELCOME");
 
-        Assert.Equal(12, rig.Handler.Requests.Count);
+        Assert.Equal(13, rig.Handler.Requests.Count);
         Assert.All(rig.Handler.Requests, r => Assert.StartsWith("/api/v1/players/ext%3Aa%20b%2Fc%25d%C3%A9", r.PathAndQuery));
     }
 

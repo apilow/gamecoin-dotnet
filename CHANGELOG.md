@@ -4,6 +4,26 @@ All notable changes to this package are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - Unreleased
+
+0.3.0 — gift codes; creator code on checkouts; pack availability.
+
+### Added
+- `gamecoin.Codes.RedeemAsync(player, code, options)`: redeems a gift code for a player (`POST /players/{player}/codes/redeem`,
+  idempotent) and returns a `Redemption` (`Grants` with the new `Balance`, `Items`, `Skipped`, `Replayed`). The code is sent
+  untouched. A refused code is `VALIDATION_FAILED` with `fieldErrors.code = ["CODE_INVALID"]`, never retried.
+- `CheckoutRequest.CreatorCode`: a creator code typed by the player. Not sent when `null`. A refused code is
+  `VALIDATION_FAILED` with `fieldErrors.creatorCode = ["CODE_INVALID"]`.
+- `Order.CreatorCode` (`OrderCreatorCode { Code, CreatorName }`, `null` when none), also in the `order.*` webhook events.
+- `CatalogPack.Availability` (`PackAvailability { StartsAt, EndsAt, Remaining, Founder }`, `null` for an ordinary pack),
+  `Catalog.Prelaunch` and `Catalog.LaunchAt`.
+- `GameCoinErrorCodes.PackNotAvailable` (`Details["startsAt"]`, `Details["endsAt"]`) and `GameCoinErrorCodes.PackSoldOut`
+  (`Details["packSku"]`), both HTTP 409.
+
+### Changed
+- The new response fields (`availability`, `prelaunch`, `launchAt`, `creatorCode`) are checked strictly when present; when a key
+  is absent (an API or a queued webhook older than this version) it reads as `null` / `false` instead of failing.
+
 ## [0.2.0] - Unreleased
 
 0.2.0 — `locale` on checkouts; webhook signature verification.

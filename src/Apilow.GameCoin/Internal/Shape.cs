@@ -44,6 +44,7 @@ internal static class Responses
     public static readonly ResponseSpec<Purchase> Purchase = new(GameCoinJsonContext.Default.Purchase, Shape.Purchase);
     public static readonly ResponseSpec<Checkout> Checkout = new(GameCoinJsonContext.Default.Checkout, Shape.Checkout);
     public static readonly ResponseSpec<Order> Order = new(GameCoinJsonContext.Default.Order, v => Shape.Order(v, "order"));
+    public static readonly ResponseSpec<Redemption> Redemption = new(GameCoinJsonContext.Default.Redemption, Shape.Redemption);
 }
 
 internal static class Shape
@@ -60,6 +61,9 @@ internal static class Shape
 
     // A missing property is an element of kind Undefined, which fails every type check below, as it should.
     private static JsonElement Prop(JsonElement o, string key) => o.TryGetProperty(key, out var value) ? value : default;
+
+    /// <summary>The property exists and is not <c>null</c>: an optional object that is then checked.</summary>
+    private static bool Given(JsonElement o, string key) => o.TryGetProperty(key, out var value) && value.ValueKind != JsonValueKind.Null;
 
     private static void Str(JsonElement o, string key, string path)
     {
@@ -262,6 +266,16 @@ internal static class Shape
         });
         StrOrNull(o, "badge", path);
         IntOrNull(o, "maxPerPlayer", path);
+
+        // 0.3: null for an ordinary pack. A key that is absent (an API older than sprint 3) reads as null; a wrong shape is refused.
+        if (Given(o, "availability"))
+        {
+            var availability = Obj(Prop(o, "availability"), $"{path}.availability");
+            DateOrNull(availability, "startsAt", $"{path}.availability");
+            DateOrNull(availability, "endsAt", $"{path}.availability");
+            IntOrNull(availability, "remaining", $"{path}.availability");
+            Bool(availability, "founder", $"{path}.availability");
+        }
     }
 
     public static void Catalog(JsonElement value, string path)
@@ -270,6 +284,17 @@ internal static class Shape
         List(o, "currencies", path, CatalogCurrency);
         List(o, "items", path, CatalogItem);
         List(o, "packs", path, CatalogPack);
+
+        // 0.3: absent (an API older than sprint 3) reads as false / null; a wrong shape is refused.
+        if (o.TryGetProperty("prelaunch", out _))
+        {
+            Bool(o, "prelaunch", path);
+        }
+
+        if (o.TryGetProperty("launchAt", out _))
+        {
+            DateOrNull(o, "launchAt", path);
+        }
     }
 
     public static void Order(JsonElement value, string path)
@@ -291,6 +316,36 @@ internal static class Shape
         DateOrNull(o, "paidAt", path);
         DateOrNull(o, "fulfilledAt", path);
         DateOrNull(o, "refundedAt", path);
+
+        // 0.3: null when the order has no creator code. Absent reads as null too, so that an event sent before sprint 3 is still
+        // accepted; a wrong shape is refused.
+        if (Given(o, "creatorCode"))
+        {
+            var creator = Obj(Prop(o, "creatorCode"), $"{path}.creatorCode");
+            Str(creator, "code", $"{path}.creatorCode");
+            Str(creator, "creatorName", $"{path}.creatorCode");
+        }
+    }
+
+    public static void Redemption(JsonElement value)
+    {
+        var o = Obj(value, "response");
+        List(o, "grants", "response", (grant, grantPath) =>
+        {
+            var g = Obj(grant, grantPath);
+            Str(g, "currency", grantPath);
+            Int(g, "amount", grantPath);
+            Balance(Prop(g, "balance"), $"{grantPath}.balance");
+        });
+        List(o, "items", "response", RedemptionItem);
+        List(o, "skipped", "response", RedemptionItem);
+    }
+
+    private static void RedemptionItem(JsonElement value, string path)
+    {
+        var o = Obj(value, path);
+        Str(o, "sku", path);
+        Int(o, "quantity", path);
     }
 
     // --- Webhook events -------------------------------------------------------------------------------------------

@@ -32,6 +32,7 @@ internal sealed class InventoryChangeResponse
 [JsonSerializable(typeof(Purchase))]
 [JsonSerializable(typeof(Checkout))]
 [JsonSerializable(typeof(Order))]
+[JsonSerializable(typeof(Redemption))]
 [JsonSerializable(typeof(WalletCreditedData))]
 [JsonSerializable(typeof(WebhookTestData))]
 internal sealed partial class GameCoinJsonContext : JsonSerializerContext

@@ -16,6 +16,7 @@ public class IdempotencyTests
         yield return Call("inventory.consume", rig => rig.Client.Inventory.ConsumeAsync(User, new InventoryConsumeRequest { Sku = "potion" }), $$"""{"item":{{Samples.Item}}}""");
         yield return Call("purchases.create", rig => rig.Client.Purchases.CreateAsync(User, new PurchaseRequest { Sku = "potion" }), $$"""{"entry":{{Samples.Entry}},"balance":{{Samples.Balance}},"item":{{Samples.Item}}}""");
         yield return Call("checkouts.create", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter" }), $$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""");
+        yield return Call("codes.redeem", rig => rig.Client.Codes.RedeemAsync(User, "WELCOME-2026"), Samples.Redemption);
     }
 
     /// <summary>The same calls with a caller-supplied key.</summary>
@@ -29,6 +30,7 @@ public class IdempotencyTests
         yield return Call("inventory.consume", rig => rig.Client.Inventory.ConsumeAsync(User, new InventoryConsumeRequest { Sku = "potion" }, options), $$"""{"item":{{Samples.Item}}}""");
         yield return Call("purchases.create", rig => rig.Client.Purchases.CreateAsync(User, new PurchaseRequest { Sku = "potion" }, options), $$"""{"entry":{{Samples.Entry}},"balance":{{Samples.Balance}},"item":{{Samples.Item}}}""");
         yield return Call("checkouts.create", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter" }, options), $$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""");
+        yield return Call("codes.redeem", rig => rig.Client.Codes.RedeemAsync(User, "WELCOME-2026", options), Samples.Redemption);
     }
 
     private static object[] Call(string name, Func<TestRig, Task> call, string okJson) => new object[] { name, call, okJson };

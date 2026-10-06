@@ -38,6 +38,27 @@ public class ShapeTests
         yield return Broken("catalog item without type", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"type\":\"consumable\",", ""), "catalog.items[0].type");
         yield return Broken("catalog pack with a bad grant", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"amount\":100,\"bonus\":20", "\"amount\":100"), "catalog.packs[0].grants[0].bonus");
         yield return Broken("catalog item with a broken price", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"price\":{\"currency\":\"gems\",\"amount\":20}", "\"price\":{\"currency\":\"gems\"}"), "catalog.items[0].price.amount");
+
+        // 0.3: gift codes, creator code, availability, prelaunch
+        yield return Broken("redemption without grants", rig => rig.Client.Codes.RedeemAsync(User, "C"), """{"items":[],"skipped":[]}""", "response.grants");
+        yield return Broken("redemption without skipped", rig => rig.Client.Codes.RedeemAsync(User, "C"), """{"grants":[],"items":[]}""", "response.skipped");
+        yield return Broken("redemption grant without balance", rig => rig.Client.Codes.RedeemAsync(User, "C"), """{"grants":[{"currency":"gems","amount":5}],"items":[],"skipped":[]}""", "response.grants[0].balance");
+        yield return Broken("redemption grant with a text amount", rig => rig.Client.Codes.RedeemAsync(User, "C"), $$"""{"grants":[{"currency":"gems","amount":"5","balance":{{Samples.Balance}}}],"items":[],"skipped":[]}""", "response.grants[0].amount");
+        yield return Broken("redemption item without quantity", rig => rig.Client.Codes.RedeemAsync(User, "C"), """{"grants":[],"items":[{"sku":"potion"}],"skipped":[]}""", "response.items[0].quantity");
+        yield return Broken("redemption skipped item without sku", rig => rig.Client.Codes.RedeemAsync(User, "C"), """{"grants":[],"items":[],"skipped":[{"quantity":1}]}""", "response.skipped[0].sku");
+        yield return Broken("order creator code that is not an object", rig => rig.Client.Orders.GetAsync("o1"), Samples.Order.Replace("\"creatorCode\":null", "\"creatorCode\":\"STREAMER10\""), "order.creatorCode");
+        yield return Broken("order creator code without a name", rig => rig.Client.Orders.GetAsync("o1"), Samples.Order.Replace("\"creatorCode\":null", "\"creatorCode\":{\"code\":\"X\"}"), "order.creatorCode.creatorName");
+        yield return Broken("order creator code with a numeric code", rig => rig.Client.Orders.GetAsync("o1"), Samples.Order.Replace("\"creatorCode\":null", "\"creatorCode\":{\"code\":7,\"creatorName\":\"A\"}"), "order.creatorCode.code");
+        yield return Broken("checkout whose order has a broken creator code", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter" }), $$"""{"order":{{Samples.Order.Replace("\"creatorCode\":null", "\"creatorCode\":[]")}},"checkoutUrl":"u"}""", "response.order.creatorCode");
+        yield return Broken("pack availability that is not an object", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"availability\":null", "\"availability\":true"), "catalog.packs[0].availability");
+        yield return Broken("pack availability without founder", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"availability\":null", "\"availability\":{\"startsAt\":null,\"endsAt\":null,\"remaining\":null}"), "catalog.packs[0].availability.founder");
+        yield return Broken("pack availability without remaining", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"availability\":null", "\"availability\":{\"startsAt\":null,\"endsAt\":null,\"founder\":false}"), "catalog.packs[0].availability.remaining");
+        yield return Broken("pack availability with a fractional stock", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"availability\":null", "\"availability\":{\"startsAt\":null,\"endsAt\":null,\"remaining\":1.5,\"founder\":false}"), "catalog.packs[0].availability.remaining");
+        yield return Broken("pack availability with a bad start", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"availability\":null", "\"availability\":{\"startsAt\":\"soon\",\"endsAt\":null,\"remaining\":null,\"founder\":false}"), "catalog.packs[0].availability.startsAt");
+        yield return Broken("pack availability without an end key", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"availability\":null", "\"availability\":{\"startsAt\":null,\"remaining\":null,\"founder\":false}"), "catalog.packs[0].availability.endsAt");
+        yield return Broken("catalog with a text prelaunch", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"prelaunch\":false", "\"prelaunch\":\"no\""), "catalog.prelaunch");
+        yield return Broken("catalog with a null prelaunch", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"prelaunch\":false", "\"prelaunch\":null"), "catalog.prelaunch");
+        yield return Broken("catalog with a bad launch date", rig => rig.Client.Catalog.GetAsync(), Samples.Catalog.Replace("\"launchAt\":null", "\"launchAt\":\"tomorrow\""), "catalog.launchAt");
     }
 
     private static object[] Broken(string name, Func<TestRig, Task> call, string body, string path) => new object[] { name, call, body, path };

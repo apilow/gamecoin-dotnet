@@ -82,6 +82,7 @@ public sealed class GameCoinClient : IDisposable
         Inventory = new InventoryResource(api);
         Purchases = new PurchasesResource(api);
         Checkouts = new CheckoutsResource(api);
+        Codes = new CodesResource(api);
         Orders = new OrdersResource(api);
     }
 
@@ -114,6 +115,9 @@ public sealed class GameCoinClient : IDisposable
 
     /// <summary>Checkouts: packs bought with real money.</summary>
     public CheckoutsResource Checkouts { get; }
+
+    /// <summary>Gift codes: redeem a code for a player.</summary>
+    public CodesResource Codes { get; }
 
     /// <summary>Orders and refunds.</summary>
     public OrdersResource Orders { get; }

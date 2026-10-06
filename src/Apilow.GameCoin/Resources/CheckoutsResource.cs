@@ -19,12 +19,14 @@ public sealed class CheckoutsResource
     /// in its current state.
     /// </summary>
     /// <param name="player">The player (created if it is an unknown <c>ext:</c> reference).</param>
-    /// <param name="request">Pack sku, return URLs, country and locale.</param>
+    /// <param name="request">Pack sku, return URLs, country, locale and creator code.</param>
     /// <param name="options">Per-call options, notably your own idempotency key.</param>
     /// <param name="cancellationToken">Cancels the call (and its retries).</param>
     /// <exception cref="ArgumentException">An argument is invalid (empty player or pack sku).</exception>
     /// <exception cref="GameCoinException">
-    /// The call failed (<see cref="GameCoinErrorCodes.NotFound"/> for an unknown pack, <see cref="GameCoinErrorCodes.LimitReached"/>...).
+    /// The call failed: <see cref="GameCoinErrorCodes.NotFound"/> for an unknown pack, <see cref="GameCoinErrorCodes.LimitReached"/>,
+    /// <see cref="GameCoinErrorCodes.PackNotAvailable"/> (outside the sale window), <see cref="GameCoinErrorCodes.PackSoldOut"/>, or
+    /// <see cref="GameCoinErrorCodes.ValidationFailed"/> with <c>fieldErrors.creatorCode = ["CODE_INVALID"]</c> for a refused creator code.
     /// </exception>
     public async Task<Checkout> CreateAsync(PlayerRef player, CheckoutRequest request, RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
@@ -35,6 +37,7 @@ public sealed class CheckoutsResource
         var cancelUrl = Guard.NotEmptyIfGiven(request.CancelUrl, "CancelUrl", nameof(request));
         var country = Guard.NotEmptyIfGiven(request.Country, "Country", nameof(request));
         var locale = Guard.NotEmptyIfGiven(request.Locale, "Locale", nameof(request));
+        var creatorCode = Guard.NotEmptyIfGiven(request.CreatorCode, "CreatorCode", nameof(request));
         var key = ApiClient.ResolveIdempotencyKey(options);
 
         var body = BodyWriter.Write(writer =>
@@ -44,6 +47,7 @@ public sealed class CheckoutsResource
             writer.WriteIfNotNull("cancelUrl", cancelUrl);
             writer.WriteIfNotNull("country", country);
             writer.WriteIfNotNull("locale", locale);
+            writer.WriteIfNotNull("creatorCode", creatorCode);
         });
 
         var response = await _api.SendAsync(

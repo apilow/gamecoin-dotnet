@@ -18,10 +18,10 @@ public class ClientTests
         Assert.Equal("https://gc.example.test/api/v1/catalog", request.Uri.ToString());
         Assert.Equal("Bearer " + TestRig.SecretKey, request.Header("Authorization"));
         Assert.Equal("application/json", request.Header("Accept"));
-        Assert.Matches(@"^gamecoin-dotnet/0\.2\.0[ ]\(dotnet/\d+\.\d+(\.\d+)?\)$", request.Header("User-Agent"));
+        Assert.Matches(@"^gamecoin-dotnet/0\.3\.0[ ]\(dotnet/\d+\.\d+(\.\d+)?\)$", request.Header("User-Agent"));
         Assert.False(request.HasHeader("Idempotency-Key"));
         Assert.False(request.HasHeader("Content-Type"));
-        Assert.Equal("0.2.0", GameCoinClient.SdkVersion);
+        Assert.Equal("0.3.0", GameCoinClient.SdkVersion);
     }
 
     [Theory]
@@ -191,6 +191,8 @@ public class ClientTests
             [nameof(GameCoinErrorCodes.NotFound)] = "NOT_FOUND",
             [nameof(GameCoinErrorCodes.InsufficientFunds)] = "INSUFFICIENT_FUNDS",
             [nameof(GameCoinErrorCodes.LimitReached)] = "LIMIT_REACHED",
+            [nameof(GameCoinErrorCodes.PackNotAvailable)] = "PACK_NOT_AVAILABLE",
+            [nameof(GameCoinErrorCodes.PackSoldOut)] = "PACK_SOLD_OUT",
             [nameof(GameCoinErrorCodes.IdempotencyConflict)] = "IDEMPOTENCY_CONFLICT",
             [nameof(GameCoinErrorCodes.Conflict)] = "CONFLICT",
             [nameof(GameCoinErrorCodes.ReadOnly)] = "READ_ONLY",

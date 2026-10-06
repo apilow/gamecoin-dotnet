@@ -43,6 +43,10 @@ public class ArgumentAndSecretTests
         yield return Bad("checkout: empty cancel url", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", CancelUrl = "" }));
         yield return Bad("checkout: empty country", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", Country = "" }));
         yield return Bad("checkout: empty locale", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", Locale = "" }));
+        yield return Bad("checkout: empty creator code", rig => rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter", CreatorCode = "" }));
+        yield return Bad("codes.redeem: default player", rig => rig.Client.Codes.RedeemAsync(none, "WELCOME"));
+        yield return Bad("codes.redeem: empty code", rig => rig.Client.Codes.RedeemAsync(User, ""));
+        yield return Bad("codes.redeem: null code", rig => rig.Client.Codes.RedeemAsync(User, null!));
         yield return Bad("upsert: empty display name", rig => rig.Client.Players.UpsertAsync(User, new PlayerProfile { DisplayName = "" }));
         yield return Bad("upsert: empty email", rig => rig.Client.Players.UpsertAsync(User, new PlayerProfile { Email = "" }));
         yield return Bad("upsert: birth year 0", rig => rig.Client.Players.UpsertAsync(User, new PlayerProfile { BirthYear = 0 }));
@@ -171,7 +175,7 @@ public class ArgumentAndSecretTests
         rig.Handler
             .Ok(Samples.Catalog).Ok(Samples.Player).Ok("""{"token":"gc_pt_x","expiresAt":"2026-10-05T21:38:32.000Z"}""")
             .Ok("""{"playerId":"p","balances":[]}""").Ok(Samples.Movement).Ok("""{"entries":[],"nextCursor":null}""")
-            .Ok($$"""{"item":{{Samples.Item}}}""").Ok($$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""").Ok(Samples.Order);
+            .Ok($$"""{"item":{{Samples.Item}}}""").Ok($$"""{"order":{{Samples.Order}},"checkoutUrl":"u"}""").Ok(Samples.Redemption).Ok(Samples.Order);
 
         var results = new List<object>
         {
@@ -183,6 +187,7 @@ public class ArgumentAndSecretTests
             await rig.Client.Ledger.ListAsync(User),
             await rig.Client.Inventory.GrantAsync(User, new InventoryGrantRequest { Sku = "potion" }),
             await rig.Client.Checkouts.CreateAsync(User, new CheckoutRequest { PackSku = "starter" }),
+            await rig.Client.Codes.RedeemAsync(User, "WELCOME"),
             await rig.Client.Orders.RefundAsync("o1"),
             rig.Client,
         };

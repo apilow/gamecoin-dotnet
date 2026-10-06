@@ -321,6 +321,28 @@ public sealed record PackItem
     public long Quantity { get; init; }
 }
 
+/// <summary>
+/// When and how many times a non-ordinary pack can be bought (a scheduled, limited or founder pack). An ordinary pack has no
+/// availability: <see cref="CatalogPack.Availability"/> is <c>null</c>.
+/// </summary>
+public sealed record PackAvailability
+{
+    /// <summary>First instant the pack can be bought (included), <c>null</c> for no start.</summary>
+    public DateTimeOffset? StartsAt { get; init; }
+
+    /// <summary>First instant the pack can no longer be bought (excluded), <c>null</c> for no end.</summary>
+    public DateTimeOffset? EndsAt { get; init; }
+
+    /// <summary>
+    /// Units left in this environment (test and live have separate stocks; units held by a pending order count), never below 0;
+    /// <c>null</c> for an unlimited stock.
+    /// </summary>
+    public long? Remaining { get; init; }
+
+    /// <summary><c>true</c> for a founder pack.</summary>
+    public bool Founder { get; init; }
+}
+
 /// <summary>A pack of the catalog: what a player buys with real money.</summary>
 public sealed record CatalogPack
 {
@@ -350,6 +372,14 @@ public sealed record CatalogPack
 
     /// <summary>Maximum number of purchases per player, <c>null</c> for no limit.</summary>
     public long? MaxPerPlayer { get; init; }
+
+    /// <summary>
+    /// Sale window, stock left and founder flag; <c>null</c> for an ordinary pack (always on sale, no limit). The catalog lists
+    /// every active pack, including scheduled, ended and sold-out ones: your shop decides what to show. Creating a checkout
+    /// outside the window is <see cref="GameCoinErrorCodes.PackNotAvailable"/>, without a unit left
+    /// <see cref="GameCoinErrorCodes.PackSoldOut"/>.
+    /// </summary>
+    public PackAvailability? Availability { get; init; }
 }
 
 /// <summary>The active currencies, items and packs of the game.</summary>
@@ -363,6 +393,15 @@ public sealed record Catalog
 
     /// <summary>Packs.</summary>
     public IReadOnlyList<CatalogPack> Packs { get; init; } = Array.Empty<CatalogPack>();
+
+    /// <summary>
+    /// <c>true</c> while the game is in its pre-launch phase (game settings): a shop then shows pre-orders with
+    /// <see cref="LaunchAt"/>. <c>false</c> for a game created before this setting existed.
+    /// </summary>
+    public bool Prelaunch { get; init; }
+
+    /// <summary>The launch date shown with the pre-orders, <c>null</c> when none is set.</summary>
+    public DateTimeOffset? LaunchAt { get; init; }
 }
 
 /// <summary>The pack an order was made for, as it was at the time of the purchase.</summary>
@@ -373,6 +412,16 @@ public sealed record OrderPack
 
     /// <summary>Pack name.</summary>
     public string Name { get; init; } = "";
+}
+
+/// <summary>The creator code an order was made with. The rates of the creator are never exposed.</summary>
+public sealed record OrderCreatorCode
+{
+    /// <summary>The code, as the studio defined it.</summary>
+    public string Code { get; init; } = "";
+
+    /// <summary>Name of the creator.</summary>
+    public string CreatorName { get; init; } = "";
 }
 
 /// <summary>An order: the purchase of a pack with real money.</summary>
@@ -419,6 +468,9 @@ public sealed record Order
 
     /// <summary>Refund time, <c>null</c> unless refunded.</summary>
     public DateTimeOffset? RefundedAt { get; init; }
+
+    /// <summary>The creator code given at checkout, <c>null</c> when the order has none.</summary>
+    public OrderCreatorCode? CreatorCode { get; init; }
 }
 
 /// <summary>The result of the creation of a checkout.</summary>
@@ -434,6 +486,46 @@ public sealed record Checkout
     /// <c>true</c> when the response was the replay of an earlier request with the same idempotency key (the order is then
     /// returned in its current state).
     /// </summary>
+    [JsonIgnore]
+    public bool Replayed { get; init; }
+}
+
+/// <summary>A quantity of an item delivered or skipped by a gift code.</summary>
+public sealed record RedemptionItem
+{
+    /// <summary>Item sku.</summary>
+    public string Sku { get; init; } = "";
+
+    /// <summary>Quantity.</summary>
+    public long Quantity { get; init; }
+}
+
+/// <summary>Free coins a gift code credited, with the balance of the currency afterwards.</summary>
+public sealed record RedemptionGrant
+{
+    /// <summary>Currency code.</summary>
+    public string Currency { get; init; } = "";
+
+    /// <summary>Amount credited to the bonus bucket (a gift code never credits paid coins).</summary>
+    public long Amount { get; init; }
+
+    /// <summary>The balance of the currency after the credit.</summary>
+    public Balance Balance { get; init; } = new();
+}
+
+/// <summary>The result of the redemption of a gift code.</summary>
+public sealed record Redemption
+{
+    /// <summary>Free coins credited, one line per currency.</summary>
+    public IReadOnlyList<RedemptionGrant> Grants { get; init; } = Array.Empty<RedemptionGrant>();
+
+    /// <summary>Items delivered.</summary>
+    public IReadOnlyList<RedemptionItem> Items { get; init; } = Array.Empty<RedemptionItem>();
+
+    /// <summary>Items the player could not receive (for instance because they already own the maximum of a durable item).</summary>
+    public IReadOnlyList<RedemptionItem> Skipped { get; init; } = Array.Empty<RedemptionItem>();
+
+    /// <summary><c>true</c> when the response was the replay of an earlier request with the same idempotency key (no second credit).</summary>
     [JsonIgnore]
     public bool Replayed { get; init; }
 }

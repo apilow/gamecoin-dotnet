@@ -149,6 +149,26 @@ foreach (var item in await gamecoin.Inventory.ListAsync(player)) // owned items 
 `Inventory.ConsumeAsync` returns the item even when it reaches 0. A durable item with `MaxOwned` raises `LIMIT_REACHED`
 beyond the limit.
 
+The catalog lists every active pack, and a pack that is not an ordinary one carries an `Availability` (`null` for an
+ordinary pack, always on sale): its sale window (`StartsAt`, included, and `EndsAt`, excluded, both `DateTimeOffset?`), the
+stock left (`Remaining`, `null` when unlimited, never below 0, counted in the environment of your key) and whether it is a
+founder pack (`Founder`). Scheduled, ended and sold-out packs are in the list too: your shop decides what to show.
+`Catalog.Prelaunch` and `Catalog.LaunchAt` tell a shop to show pre-orders with the launch date.
+
+```csharp
+foreach (var pack in catalog.Packs)
+{
+    var availability = pack.Availability; // null: an ordinary pack
+    var stock = availability?.Remaining is { } left ? $"{left} left" : "no limit";
+    Console.WriteLine($"{pack.Sku}: {(availability?.Founder == true ? "founder, " : "")}{stock}, on sale from {availability?.StartsAt?.ToString("u") ?? "always"}");
+}
+
+if (catalog.Prelaunch)
+{
+    Console.WriteLine($"pre-order, launch on {catalog.LaunchAt:u}");
+}
+```
+
 ## Checkout, orders and refunds
 
 A **checkout** sells a *pack* for real money: you create an order, send the player to `CheckoutUrl`, and the coins and
@@ -162,6 +182,7 @@ var checkout = await gamecoin.Checkouts.CreateAsync(player, new CheckoutRequest
     CancelUrl = "https://game.example.com/shop",         // optional
     Country = "BE",                                      // optional: the VAT country (server side only)
     Locale = CheckoutLocale.English,                     // optional: "fr", "en" or "nl", the language of the payment page, receipt and e-mails
+    CreatorCode = "STREAMER10",                          // optional: a creator code the player typed (sent as is, not sent when null)
 });
 Console.WriteLine($"{checkout.Order.Status}: {checkout.Order.AmountCents} cents ({checkout.Order.Currency}), pay at {checkout.CheckoutUrl}");
 
@@ -184,8 +205,72 @@ In test mode the payment is simulated: open `CheckoutUrl` and press "Pay (simula
 value other than `fr`, `en` and `nl` without an error, and the SDK does not send the field when it is `null`. A pending
 order that the API reuses takes the language of the latest request.
 
+A **creator code** gives the buyer a bonus of free coins on delivery and the creator a commission (both are cancelled on
+refund). `Order.CreatorCode` (`null` when there is none) shows `Code` and `CreatorName`, never the rates, and it travels in the
+`order.*` webhooks. A code the API refuses (unknown, disabled, not valid for the pack…) raises `VALIDATION_FAILED` with
+`fieldErrors.creatorCode = ["CODE_INVALID"]`:
+
+```csharp
+try
+{
+    await gamecoin.Checkouts.CreateAsync(player, new CheckoutRequest { PackSku = "gems-500", CreatorCode = "NOT-A-CODE" });
+}
+catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.ValidationFailed
+                                   && ex.Details["fieldErrors"].TryGetProperty("creatorCode", out _))
+{
+    Console.WriteLine("this creator code is not valid"); // let the player try another one, or buy without a code
+}
+catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.PackNotAvailable)
+{
+    Console.WriteLine($"not on sale: from {ex.Details["startsAt"]} to {ex.Details["endsAt"]}"); // ISO 8601 text, or null
+}
+catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.PackSoldOut)
+{
+    Console.WriteLine($"sold out: {ex.Details["packSku"]}");
+}
+```
+
+A pack outside its sale window is `PACK_NOT_AVAILABLE` (`Details["startsAt"]` and `Details["endsAt"]`, ISO 8601 text or
+`null`) and a pack without a unit left is `PACK_SOLD_OUT` (`Details["packSku"]`), both HTTP 409 and never retried. The window
+is checked when the order is created: an order created in time stays payable.
+
 **Refunds have no idempotency key**, so the SDK retries `RefundAsync` on `429` only. After a network error, a timeout or
 a `5xx` it raises, and you should check the outcome with `Orders.GetAsync` (status `refunded` or not) before trying again.
+
+## Codes
+
+A **gift code** is a code the studio issued (limited uses, one use per player, optional expiry): the player types it, and
+you redeem it for them. It adds free coins (the *bonus* bucket, never paid coins) and items.
+
+```csharp
+try
+{
+    Redemption redemption = await gamecoin.Codes.RedeemAsync(player, "WELCOME-2026"); // idempotent, like a grant
+    foreach (var grant in redemption.Grants)
+    {
+        Console.WriteLine($"+{grant.Amount} {grant.Currency} -> {grant.Balance.Total}");
+    }
+
+    Console.WriteLine($"items: {string.Join(", ", redemption.Items.Select(i => $"{i.Sku} x{i.Quantity}"))}");
+    Console.WriteLine($"skipped: {string.Join(", ", redemption.Skipped.Select(i => $"{i.Sku} x{i.Quantity}"))}"); // items the player could not receive
+}
+catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.ValidationFailed)
+{
+    Console.WriteLine("this code is not valid"); // fieldErrors.code = ["CODE_INVALID"]
+}
+```
+
+- Send the code as the player typed it: the API ignores case, spaces and dashes, and the SDK does not change it. It only
+  checks that it is not empty.
+- Every refusal of the code itself (unknown, malformed, expired, used up, disabled, already used by this player, or a creator
+  code) is the same `VALIDATION_FAILED` with `fieldErrors.code = ["CODE_INVALID"]`: nothing tells a guess from a real code, and
+  the SDK never retries it. Attempts are rate limited: `RATE_LIMITED` carries `RetryAfter`.
+- A blocked player is `PLAYER_BLOCKED`. A code whose content the player can no longer receive at all is `LIMIT_REACHED` (they
+  own the maximum of every item) or `CONFLICT` (a currency or an item was archived since); the code is not used up then.
+- Like every call that changes something, `RedeemAsync` carries an idempotency key (generated once per call, or yours in
+  `RequestOptions`): replaying the same key returns the same `Redemption` with `Replayed == true` and credits nothing twice.
+- A **creator code** is a different thing: it goes in `CheckoutRequest.CreatorCode`, see
+  [Checkout, orders and refunds](#checkout-orders-and-refunds).
 
 ## Webhooks
 
@@ -257,7 +342,7 @@ constants, and `Data` is typed by it:
 
 | `Type` | `Data` |
 |---|---|
-| `order.fulfilled`, `order.refunded`, `order.chargeback` | `Order`, the same object as `Orders.GetAsync` |
+| `order.fulfilled`, `order.refunded`, `order.chargeback` | `Order`, the same object as `Orders.GetAsync` (with its `CreatorCode`, or `null`) |
 | `wallet.credited` | `WalletCreditedData` (`PlayerId`, `OrderId`, `Credits` with `Currency`, `Paid`, `Bonus`) |
 | `webhook.test` | `WebhookTestData` (`Message`) |
 | anything else | the untouched `JsonElement`: an event type added later never fails |
@@ -288,7 +373,7 @@ Console.WriteLine($"{first.Replayed}, {second.Replayed}, same entry: {first.Entr
 ```
 
 `Replayed` is `true` when the API answered with the original response of an earlier request with the same key (header
-`Idempotent-Replayed: true`); it exists on `Movement`, `Purchase`, `Checkout` and `InventoryItem`. The same key with a
+`Idempotent-Replayed: true`); it exists on `Movement`, `Purchase`, `Checkout`, `Redemption` and `InventoryItem`. The same key with a
 *different* request raises `IDEMPOTENCY_CONFLICT`. A key is 1 to 100 printable ASCII characters and is kept for 30 days.
 A replayed checkout returns the order in its **current** state.
 
@@ -300,7 +385,7 @@ Automatic retries (at most `MaxRetries`, so three attempts by default):
 | Any other `4xx` | never |
 | `RefundAsync` | on `429` only |
 
-Every read, `UpsertAsync`, `CreateTokenAsync` and every call with an idempotency key follows the first line; a call cancelled
+Every read, `UpsertAsync`, `CreateTokenAsync` and every call with an idempotency key (including `Codes.RedeemAsync`) follows the first line; a call cancelled
 through its `CancellationToken` is never retried (`OperationCanceledException`).
 
 The delay is `0.5 s × 2^attempt × a random factor in [0.75, 1.25]`. A `Retry-After` header (seconds or an HTTP date) wins,
@@ -342,7 +427,7 @@ catch (GameCoinException ex)
 
 The codes are constants of `GameCoinErrorCodes`: `ValidationFailed`, `IdempotencyKeyRequired`, `Unauthenticated`,
 `PaymentFailed`, `Forbidden`, `PlayerBlocked`, `EnvNotEnabled`, `NotFound`, `InsufficientFunds`, `LimitReached`,
-`IdempotencyConflict`, `Conflict`, `ReadOnly`, `RateLimited`, `Internal`, plus the SDK's own `NetworkError`, `Timeout`
+`PackNotAvailable`, `PackSoldOut`, `IdempotencyConflict`, `Conflict`, `ReadOnly`, `RateLimited`, `Internal`, plus the SDK's own `NetworkError`, `Timeout`
 and `InvalidResponse`. `Details["fieldErrors"]` is meant for developers, not for parsing. Unknown fields in a response are
 ignored, an API code this version does not know is passed through as is, and an unknown future `Status` or `Type` value
 stays readable as a string.
@@ -370,7 +455,7 @@ GAMECOIN_SECRET_KEY=gc_sk_test_… GAMECOIN_BASE_URL=http://localhost:3400 dotne
 
 ## Status
 
-Pre-release (`0.2.0`). The API runs in **test mode with simulated payments**; real payments are not available yet. The
+Pre-release (`0.3.0`). The API runs in **test mode with simulated payments**; real payments are not available yet. The
 package and repository names may change before the first public release.
 
 ## Licence

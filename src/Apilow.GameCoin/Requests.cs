@@ -108,6 +108,14 @@ public sealed record CheckoutRequest
     /// latest request.
     /// </summary>
     public string? Locale { get; init; }
+
+    /// <summary>
+    /// A creator code the player typed. The buyer then gets a bonus of free coins on delivery and the creator earns a commission;
+    /// both are cancelled on refund. Not sent when <c>null</c>; the SDK only checks that it is not empty (the API ignores case,
+    /// spaces and dashes). A refused code is <see cref="GameCoinErrorCodes.ValidationFailed"/> with
+    /// <c>fieldErrors.creatorCode = ["CODE_INVALID"]</c>. The order shows it in <see cref="Order.CreatorCode"/>.
+    /// </summary>
+    public string? CreatorCode { get; init; }
 }
 
 /// <summary>Languages of the hosted payment page, for <see cref="CheckoutRequest.Locale"/>.</summary>
