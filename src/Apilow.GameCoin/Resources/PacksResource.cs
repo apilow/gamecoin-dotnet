@@ -7,7 +7,7 @@ using Apilow.GameCoin.Internal;
 
 namespace Apilow.GameCoin;
 
-/// <summary>The packs of the game: <c>/packs</c>. The catalog is shared by the <c>test</c> and <c>live</c> environments.</summary>
+/// <summary>The packs of the game: <c>/packs</c>. Each environment has its own catalog.</summary>
 public sealed class PacksResource
 {
     private readonly ApiClient _api;

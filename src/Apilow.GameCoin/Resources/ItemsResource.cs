@@ -7,7 +7,7 @@ using Apilow.GameCoin.Internal;
 
 namespace Apilow.GameCoin;
 
-/// <summary>The items of the game: <c>/items</c>. The catalog is shared by the <c>test</c> and <c>live</c> environments.</summary>
+/// <summary>The items of the game: <c>/items</c>. Each environment has its own catalog.</summary>
 public sealed class ItemsResource
 {
     private readonly ApiClient _api;

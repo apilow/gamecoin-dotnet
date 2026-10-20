@@ -7,7 +7,7 @@ using Apilow.GameCoin.Internal;
 
 namespace Apilow.GameCoin;
 
-/// <summary>The currencies of the game: <c>/currencies</c>. The catalog is shared by the <c>test</c> and <c>live</c> environments.</summary>
+/// <summary>The currencies of the game: <c>/currencies</c>. Each environment has its own catalog.</summary>
 public sealed class CurrenciesResource
 {
     private readonly ApiClient _api;

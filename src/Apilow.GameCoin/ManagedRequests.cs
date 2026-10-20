@@ -3,8 +3,8 @@ using System.Collections.Generic;
 
 namespace Apilow.GameCoin;
 
-// Requests of the catalog management. The catalog is shared by the test and live environments of the game: a resource created
-// with a test key exists for live keys too. A code or a sku is the natural key of a create (a taken one is
+// Requests of the catalog management. Each environment has its own catalog: a resource created
+// with a test key exists in test only. A code or a sku is the natural key of a create (a taken one is
 // GameCoinErrorCodes.Conflict with fieldErrors "sku": ["SKU_TAKEN"] or "code": ["CODE_TAKEN"]).
 
 /// <summary>Creates a currency (<see cref="CurrenciesResource.CreateAsync"/>).</summary>

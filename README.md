@@ -174,8 +174,7 @@ if (catalog.Prelaunch)
 `Currencies`, `Items` and `Packs` create, change and archive the catalog, the way a payment platform manages its products and
 prices. Each has `CreateAsync`, `GetAsync`, `UpdateAsync`, `ArchiveAsync` and `ListAsync`.
 
-> The catalog is shared by the test and live environments of the game: a pack created with a test key exists for live keys
-> too. Create a new pack as a draft (the default) and turn it on with `Status = PackStatus.Active` when it is ready.
+> Each environment has its own catalog: the key decides which one you change, and a pack created with a test key exists in test only. Create a new pack as a draft (the default) and turn it on with `Status = PackStatus.Active` when it is ready.
 
 ```csharp
 await gamecoin.Currencies.CreateAsync(new CreateCurrencyRequest { Code = "rubies", Name = "Rubies" });

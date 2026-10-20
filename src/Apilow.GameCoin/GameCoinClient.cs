@@ -125,7 +125,7 @@ public sealed class GameCoinClient : IDisposable
     /// <summary>Orders and refunds.</summary>
     public OrdersResource Orders { get; }
 
-    /// <summary>Manages the currencies of the game. The catalog is shared by the <c>test</c> and <c>live</c> environments.</summary>
+    /// <summary>Manages the currencies of the game. Each environment has its own catalog.</summary>
     public CurrenciesResource Currencies { get; }
 
     /// <summary>Manages the items of the game.</summary>
