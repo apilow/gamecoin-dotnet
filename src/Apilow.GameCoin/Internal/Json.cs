@@ -17,6 +17,21 @@ internal sealed class InventoryChangeResponse
     public InventoryItem Item { get; init; } = new();
 }
 
+internal sealed class CurrencyListResponse
+{
+    public IReadOnlyList<ManagedCurrency> Currencies { get; init; } = Array.Empty<ManagedCurrency>();
+}
+
+internal sealed class ItemListResponse
+{
+    public IReadOnlyList<ManagedItem> Items { get; init; } = Array.Empty<ManagedItem>();
+}
+
+internal sealed class PackListResponse
+{
+    public IReadOnlyList<ManagedPack> Packs { get; init; } = Array.Empty<ManagedPack>();
+}
+
 /// <summary>Source-generated (de)serialisation of the responses: no reflection, safe for trimming, AOT and IL2CPP.</summary>
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -33,6 +48,12 @@ internal sealed class InventoryChangeResponse
 [JsonSerializable(typeof(Checkout))]
 [JsonSerializable(typeof(Order))]
 [JsonSerializable(typeof(Redemption))]
+[JsonSerializable(typeof(ManagedCurrency))]
+[JsonSerializable(typeof(ManagedItem))]
+[JsonSerializable(typeof(ManagedPack))]
+[JsonSerializable(typeof(CurrencyListResponse))]
+[JsonSerializable(typeof(ItemListResponse))]
+[JsonSerializable(typeof(PackListResponse))]
 [JsonSerializable(typeof(WalletCreditedData))]
 [JsonSerializable(typeof(WebhookTestData))]
 internal sealed partial class GameCoinJsonContext : JsonSerializerContext

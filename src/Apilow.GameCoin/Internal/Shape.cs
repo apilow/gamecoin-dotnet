@@ -45,9 +45,15 @@ internal static class Responses
     public static readonly ResponseSpec<Checkout> Checkout = new(GameCoinJsonContext.Default.Checkout, Shape.Checkout);
     public static readonly ResponseSpec<Order> Order = new(GameCoinJsonContext.Default.Order, v => Shape.Order(v, "order"));
     public static readonly ResponseSpec<Redemption> Redemption = new(GameCoinJsonContext.Default.Redemption, Shape.Redemption);
+    public static readonly ResponseSpec<ManagedCurrency> ManagedCurrency = new(GameCoinJsonContext.Default.ManagedCurrency, v => Shape.ManagedCurrency(v, "currency"));
+    public static readonly ResponseSpec<ManagedItem> ManagedItem = new(GameCoinJsonContext.Default.ManagedItem, v => Shape.ManagedItem(v, "item"));
+    public static readonly ResponseSpec<ManagedPack> ManagedPack = new(GameCoinJsonContext.Default.ManagedPack, v => Shape.ManagedPack(v, "pack"));
+    public static readonly ResponseSpec<CurrencyListResponse> CurrencyListResponse = new(GameCoinJsonContext.Default.CurrencyListResponse, v => Shape.ManagedList(v, "currencies", Shape.ManagedCurrency));
+    public static readonly ResponseSpec<ItemListResponse> ItemListResponse = new(GameCoinJsonContext.Default.ItemListResponse, v => Shape.ManagedList(v, "items", Shape.ManagedItem));
+    public static readonly ResponseSpec<PackListResponse> PackListResponse = new(GameCoinJsonContext.Default.PackListResponse, v => Shape.ManagedList(v, "packs", Shape.ManagedPack));
 }
 
-internal static class Shape
+internal static partial class Shape
 {
     private static JsonElement Obj(JsonElement value, string path)
     {

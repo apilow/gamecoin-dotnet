@@ -84,6 +84,9 @@ public sealed class GameCoinClient : IDisposable
         Checkouts = new CheckoutsResource(api);
         Codes = new CodesResource(api);
         Orders = new OrdersResource(api);
+        Currencies = new CurrenciesResource(api);
+        Items = new ItemsResource(api);
+        Packs = new PacksResource(api);
     }
 
     /// <summary>The version of this SDK.</summary>
@@ -121,6 +124,15 @@ public sealed class GameCoinClient : IDisposable
 
     /// <summary>Orders and refunds.</summary>
     public OrdersResource Orders { get; }
+
+    /// <summary>Manages the currencies of the game. The catalog is shared by the <c>test</c> and <c>live</c> environments.</summary>
+    public CurrenciesResource Currencies { get; }
+
+    /// <summary>Manages the items of the game.</summary>
+    public ItemsResource Items { get; }
+
+    /// <summary>Manages the packs of the game.</summary>
+    public PacksResource Packs { get; }
 
     /// <summary>Releases the <see cref="HttpClient"/> the client created (an injected one is left alone).</summary>
     public void Dispose() => _ownedHttpClient?.Dispose();

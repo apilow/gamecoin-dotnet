@@ -169,6 +169,50 @@ if (catalog.Prelaunch)
 }
 ```
 
+## Manage the catalog
+
+`Currencies`, `Items` and `Packs` create, change and archive the catalog, the way a payment platform manages its products and
+prices. Each has `CreateAsync`, `GetAsync`, `UpdateAsync`, `ArchiveAsync` and `ListAsync`.
+
+> The catalog is shared by the test and live environments of the game: a pack created with a test key exists for live keys
+> too. Create a new pack as a draft (the default) and turn it on with `Status = PackStatus.Active` when it is ready.
+
+```csharp
+await gamecoin.Currencies.CreateAsync(new CreateCurrencyRequest { Code = "rubies", Name = "Rubies" });
+await gamecoin.Items.CreateAsync(new CreateItemRequest
+{
+    Sku = "elixir", Name = "Elixir", Type = ItemType.Consumable, Price = new ItemPrice { Currency = "gems", Amount = 15 },
+});
+
+var pack = await gamecoin.Packs.CreateAsync(new CreatePackRequest
+{
+    Sku = "mega",
+    Name = "Mega pack",
+    PriceCents = 999,
+    Grants = new[] { new PackGrant { Currency = "gems", Amount = 1200, Bonus = 100 } },
+    Items = new[] { new PackItem { Sku = "elixir", Quantity = 2 } },
+});
+Console.WriteLine(pack.Status); // draft
+
+await gamecoin.Packs.UpdateAsync("mega", new UpdatePackRequest
+{
+    PriceCents = 1099,
+    Availability = new PackAvailabilityRequest { StartsAt = new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero), Stock = 500, Founder = true }, // replaces the whole availability
+    Status = PackStatus.Active,
+});
+await gamecoin.Items.UpdateAsync("elixir", new UpdateItemRequest { Clear = ItemFields.Price }); // erase the price
+await gamecoin.Packs.ArchiveAsync("mega"); // nothing is deleted
+var everything = await gamecoin.Packs.ListAsync(includeArchived: true);
+```
+
+A `null` property of an `Update` request is left unchanged; to erase a description, a price, a badge or a limit, list it in
+`Clear`. The identifiers (`Code`, `Sku`) and the `Type` of an item are final, so the update requests have no property for them.
+A taken identifier is `Conflict` with `Details["fieldErrors"]` holding `"sku": ["SKU_TAKEN"]` (`"code": ["CODE_TAKEN"]` for a
+currency); an invalid pack is `ValidationFailed` with the faulty lines in `Details["fieldErrors"]`; archiving something that an
+active pack still uses is `Conflict` with `Details["blockedBy"]`. A create has no idempotency key (the identifier is its natural
+key), so it is retried on `429` only: after a network error, a timeout or a `5xx`, read the resource back with `GetAsync`
+before you try again.
+
 ## Checkout, orders and refunds
 
 A **checkout** sells a *pack* for real money: you create an order, send the player to `CheckoutUrl`, and the coins and
@@ -455,7 +499,7 @@ GAMECOIN_SECRET_KEY=gc_sk_test_… GAMECOIN_BASE_URL=http://localhost:3400 dotne
 
 ## Status
 
-Pre-release (`0.3.0`). The API runs in **test mode with simulated payments**; real payments are not available yet. The
+Pre-release (`0.4.0`). The API runs in **test mode with simulated payments**; real payments are not available yet. The
 package and repository names may change before the first public release.
 
 ## Licence

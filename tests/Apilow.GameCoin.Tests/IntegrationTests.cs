@@ -264,6 +264,82 @@ public class IntegrationTests
     }
 
     [IntegrationFact]
+    public async Task Catalog_management_round_trip()
+    {
+        using var gc = new GameCoinClient(SecretKey!, new GameCoinOptions { BaseUrl = BaseUrl! });
+        var ct = CancellationToken.None;
+        // A fresh suffix for every run: a code or a sku is never reusable, even once archived.
+        var suffix = Guid.NewGuid().ToString("N")[..10];
+        string code = "ruby_" + suffix, itemSku = "elixir-" + suffix, packSku = "mega-" + suffix;
+
+        var currency = await gc.Currencies.CreateAsync(new CreateCurrencyRequest { Code = code, Name = "Ruby", Purchasable = true }, ct);
+        Assert.Equal((CatalogStatus.Active, true), (currency.Status, currency.Purchasable));
+        Assert.Equal("Red ruby", (await gc.Currencies.UpdateAsync(code, new UpdateCurrencyRequest { Name = "Red ruby" }, ct)).Name);
+
+        var item = await gc.Items.CreateAsync(new CreateItemRequest
+        {
+            Sku = itemSku,
+            Name = "Elixir",
+            Type = ItemType.Consumable,
+            Price = new ItemPrice { Currency = code, Amount = 15 },
+            ClientPurchasable = true,
+            Metadata = new Dictionary<string, string> { ["heal"] = "30" },
+        }, ct);
+        Assert.Equal((code, 15L), (item.Price!.Currency, item.Price.Amount));
+        Assert.Null(item.MaxOwned);
+        Assert.Equal(25, (await gc.Items.UpdateAsync(itemSku, new UpdateItemRequest { Price = new ItemPrice { Currency = code, Amount = 25 } }, ct)).Price!.Amount);
+
+        var pack = await gc.Packs.CreateAsync(new CreatePackRequest
+        {
+            Sku = packSku,
+            Name = "Mega pack",
+            PriceCents = 999,
+            Grants = new[] { new PackGrant { Currency = code, Amount = 1200, Bonus = 100 } },
+            Items = new[] { new PackItem { Sku = itemSku, Quantity = 2 } },
+            Badge = "best_value",
+        }, ct);
+        Assert.Equal(PackStatus.Draft, pack.Status);
+        Assert.Null(pack.Availability);
+
+        var starts = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var live = await gc.Packs.UpdateAsync(packSku, new UpdatePackRequest
+        {
+            PriceCents = 1099,
+            Status = PackStatus.Active,
+            Availability = new PackAvailabilityRequest { StartsAt = starts, Stock = 50, Founder = true },
+        }, ct);
+        Assert.Equal(PackStatus.Active, live.Status);
+        Assert.Equal((starts, 50L, true, 0L), (live.Availability!.StartsAt!.Value, live.Availability.Stock, live.Availability.Founder, live.Availability.Sold));
+        Assert.Null(live.Availability.EndsAt);
+        var publicPack = (await gc.Catalog.GetAsync(ct)).Packs.Single(p => p.Sku == packSku);
+        Assert.Equal(50, publicPack.Availability!.Remaining);
+        Assert.Contains(await gc.Items.ListAsync(cancellationToken: ct), i => i.Sku == itemSku);
+
+        // Archiving goes top-down: a pack, then the item it holds, then the currency.
+        Assert.Equal(PackStatus.Archived, (await gc.Packs.ArchiveAsync(packSku, ct)).Status);
+        Assert.Equal(CatalogStatus.Archived, (await gc.Items.ArchiveAsync(itemSku, ct)).Status);
+        Assert.Equal(CatalogStatus.Archived, (await gc.Currencies.ArchiveAsync(code, ct)).Status);
+        Assert.Equal(CatalogStatus.Archived, (await gc.Currencies.ArchiveAsync(code, ct)).Status);
+        Assert.Equal(CatalogStatus.Archived, (await gc.Currencies.GetAsync(code, ct)).Status);
+        Assert.DoesNotContain(await gc.Currencies.ListAsync(cancellationToken: ct), c => c.Code == code);
+        Assert.Contains(await gc.Currencies.ListAsync(includeArchived: true, cancellationToken: ct), c => c.Code == code);
+        var left = await gc.Catalog.GetAsync(ct);
+        Assert.DoesNotContain(left.Currencies, c => c.Code == code);
+        Assert.DoesNotContain(left.Packs, p => p.Sku == packSku);
+
+        var taken = await Assert.ThrowsAsync<GameCoinException>(() => gc.Currencies.CreateAsync(new CreateCurrencyRequest { Code = "gems", Name = "Again" }, ct));
+        Assert.Equal(GameCoinErrorCodes.Conflict, taken.Code);
+        Assert.True(taken.Details.ContainsKey("fieldErrors"));
+        var blocked = await Assert.ThrowsAsync<GameCoinException>(() => gc.Currencies.ArchiveAsync("gems", ct));
+        Assert.Equal(GameCoinErrorCodes.Conflict, blocked.Code);
+        Assert.True(blocked.Details.ContainsKey("blockedBy"));
+        var invalid = await Assert.ThrowsAsync<GameCoinException>(() => gc.Packs.CreateAsync(new CreatePackRequest { Sku = "empty-" + suffix, Name = "Empty", PriceCents = 500 }, ct));
+        Assert.Equal(GameCoinErrorCodes.ValidationFailed, invalid.Code);
+        var missing = await Assert.ThrowsAsync<GameCoinException>(() => gc.Items.GetAsync("nope-" + suffix, ct));
+        Assert.Equal(GameCoinErrorCodes.NotFound, missing.Code);
+    }
+
+    [IntegrationFact]
     public async Task A_wrong_key_is_unauthenticated()
     {
         using var gamecoin = new GameCoinClient("gc_sk_test_definitelyNotARealKey", new GameCoinOptions { BaseUrl = BaseUrl! });
