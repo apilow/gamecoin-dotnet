@@ -2,7 +2,7 @@
 
 Server SDK for **Apilow GameCoin**, the bank of your game: virtual currencies, inventory and sales, behind one API.
 Use it from your game backend (ASP.NET, a worker, a dedicated server) to grant and spend coins, manage items, and sell
-packs with real money.
+packs with real money. Full documentation: [gamecoin.apilow.com/docs/sdk/dotnet](https://gamecoin.apilow.com/docs/sdk/dotnet).
 
 - `net8.0` and `netstandard2.1` (so Unity editor tools and dedicated servers can use it too).
 - **No dependency** on `net8.0` (`HttpClient`, `System.Text.Json`). On `netstandard2.1` the only dependency is `System.Text.Json`.
@@ -242,7 +242,7 @@ catch (GameCoinException ex) when (ex.Code == GameCoinErrorCodes.Conflict)
 }
 ```
 
-In test mode the payment is simulated: open `CheckoutUrl` and press "Pay (simulated)".
+In test mode the payment is simulated: open `CheckoutUrl` and press "Pay (simulated)". With a live key the page takes a real payment.
 
 `Locale` is the language of the hosted payment page, of the receipt and of the e-mails of the order. The API ignores any
 value other than `fr`, `en` and `nl` without an error, and the SDK does not send the field when it is `null`. A pending
@@ -498,7 +498,7 @@ GAMECOIN_SECRET_KEY=gc_sk_test_… GAMECOIN_BASE_URL=http://localhost:3400 dotne
 
 ## Status
 
-Pre-release (`0.4.0`). The API runs in **test mode with simulated payments**; real payments are not available yet. The
+Pre-release (`0.4.0`). The API has a **test environment** (simulated payments) and a **live environment** (real payments), reserved for verified studios. The
 package and repository names may change before the first public release.
 
 ## Licence
